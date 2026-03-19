@@ -1,0 +1,57 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.625rem;
+    /* Dark cricket dashboard theme */
+    --background: 0.17 0.05 240;
+    --foreground: 0.94 0.02 220;
+    --card: 0.22 0.06 230;
+    --card-foreground: 0.94 0.02 220;
+    --popover: 0.22 0.06 230;
+    --popover-foreground: 0.94 0.02 220;
+    --primary: 0.7 0.18 152;
+    --primary-foreground: 0.99 0 0;
+    --secondary: 0.25 0.06 228;
+    --secondary-foreground: 0.94 0.02 220;
+    --muted: 0.25 0.06 228;
+    --muted-foreground: 0.71 0.04 220;
+    --accent: 0.7 0.18 152;
+    --accent-foreground: 0.99 0 0;
+    --destructive: 0.58 0.2 25;
+    --destructive-foreground: 0.99 0 0;
+    --border: 0.3 0.06 225;
+    --input: 0.25 0.06 228;
+    --ring: 0.7 0.18 152;
+    --chart-1: 0.7 0.18 152;
+    --chart-2: 0.6 0.15 200;
+    --chart-3: 0.65 0.16 260;
+    --chart-4: 0.72 0.18 80;
+    --chart-5: 0.58 0.2 25;
+    --sidebar: 0.19 0.05 238;
+    --sidebar-foreground: 0.94 0.02 220;
+    --sidebar-primary: 0.7 0.18 152;
+    --sidebar-primary-foreground: 0.99 0 0;
+    --sidebar-accent: 0.25 0.06 228;
+    --sidebar-accent-foreground: 0.94 0.02 220;
+    --sidebar-border: 0.28 0.05 232;
+    --sidebar-ring: 0.7 0.18 152;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", sans-serif;
+  }
+}
