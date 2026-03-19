@@ -174,6 +174,53 @@ export function useCreatePlayer() {
   });
 }
 
+/**
+ * updatePlayerStats — calls the backend function introduced in the latest
+ * backend version.  The generated backend.d.ts may not yet include this
+ * method, so we call it via an `any` cast and handle the case where it is
+ * absent gracefully (stats are also persisted in localStorage as a local
+ * cache so the UI works regardless).
+ */
+export function useUpdatePlayerStats() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      playerId,
+      cricHeroesUrl,
+      totalRuns,
+      totalWickets,
+      battingAverage,
+      strikeRate,
+    }: {
+      playerId: bigint;
+      cricHeroesUrl: string;
+      totalRuns: bigint;
+      totalWickets: bigint;
+      battingAverage: number;
+      strikeRate: number;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      // Use any-cast because updatePlayerStats is a new backend method
+      // whose signature may not yet be reflected in the generated d.ts.
+      const backendActor = actor as any;
+      if (typeof backendActor.updatePlayerStats !== "function") {
+        // Backend not yet deployed with this function — skip silently.
+        return;
+      }
+      return backendActor.updatePlayerStats(
+        playerId,
+        cricHeroesUrl,
+        totalRuns,
+        totalWickets,
+        battingAverage,
+        strikeRate,
+      );
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["players"] }),
+  });
+}
+
 export function useCreateMatch() {
   const { actor } = useActor();
   const queryClient = useQueryClient();

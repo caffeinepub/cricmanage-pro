@@ -11,16 +11,21 @@ import Runtime "mo:core/Runtime";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
+
+
 actor {
   // Persistent Stores
   let tournaments = Map.empty<Nat, Tournament>();
   let teams = Map.empty<Nat, Team>();
   let players = Map.empty<Nat, Player>();
+  // Separate stable store for CricHeroes stats — avoids Player type migration error
+  let playerStats = Map.empty<Nat, PlayerStats>();
   let matches = Map.empty<Nat, Match>();
   let innings = Map.empty<Nat, Innings>();
   let innRuns = Map.empty<Nat, Nat>();
   let battingEntries = Map.empty<Nat, BattingEntry>();
   let bowlingEntries = Map.empty<Nat, BowlingEntry>();
+  let feedbackMessages = Map.empty<Nat, FeedbackMessage>();
 
   var nextTournamentId = 1;
   var nextTeamId = 1;
@@ -29,6 +34,7 @@ actor {
   var nextInningsId = 1;
   var nextBattingEntryId = 1;
   var nextBowlingEntryId = 1;
+  var nextFeedbackId = 1;
 
   // Types
   type Timestamp = Time.Time;
@@ -69,12 +75,39 @@ actor {
     #wicketkeeper;
   };
 
+  // Original Player type — unchanged for stable compatibility
   type Player = {
     id : Nat;
     teamId : Nat;
     name : Text;
     role : PlayerRole;
     jerseyNumber : Nat;
+  };
+
+  // Separate type for CricHeroes / historical stats
+  type PlayerStats = {
+    playerId : Nat;
+    cricHeroesUrl : Text;
+    totalRuns : Nat;
+    totalWickets : Nat;
+    battingAverage : Float;
+    strikeRate : Float;
+    cricHeroesVerified : Bool;
+  };
+
+  // Combined view type for frontend
+  public type PlayerWithStats = {
+    id : Nat;
+    teamId : Nat;
+    name : Text;
+    role : PlayerRole;
+    jerseyNumber : Nat;
+    cricHeroesUrl : Text;
+    totalRuns : Nat;
+    totalWickets : Nat;
+    battingAverage : Float;
+    strikeRate : Float;
+    cricHeroesVerified : Bool;
   };
 
   type MatchStatus = {
@@ -141,26 +174,20 @@ actor {
     };
   };
 
+  type FeedbackMessage = {
+    id : Nat;
+    authorPrincipal : Principal;
+    authorRole : Text;
+    category : Text;
+    message : Text;
+    timestamp : Timestamp;
+  };
+
   // Trending stats
   let trendingPlayers = [
-    {
-      playerId = 1;
-      tournamentId = 1;
-      runs = 1050;
-      wickets = 35;
-    },
-    {
-      playerId = 2;
-      tournamentId = 2;
-      runs = 980;
-      wickets = 28;
-    },
-    {
-      playerId = 3;
-      tournamentId = 1;
-      runs = 1120;
-      wickets = 40;
-    },
+    { playerId = 1; tournamentId = 1; runs = 1050; wickets = 35 },
+    { playerId = 2; tournamentId = 2; runs = 980;  wickets = 28 },
+    { playerId = 3; tournamentId = 1; runs = 1120; wickets = 40 },
   ];
 
   let accessControlState = AccessControl.initState();
@@ -169,6 +196,13 @@ actor {
   // User Profile Management
   public type UserProfile = {
     name : Text;
+    role : Role;
+  };
+
+  public type Role = {
+    #organiser;
+    #franchisee;
+    #viewer;
   };
 
   let userProfiles = Map.empty<Principal, UserProfile>();
@@ -191,20 +225,50 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
-    userProfiles.add(caller, profile);
+    let existingRole = switch (userProfiles.get(caller)) {
+      case (?existing) { existing.role };
+      case (null) { #viewer };
+    };
+    let profileToSave : UserProfile = {
+      name = profile.name;
+      role = existingRole;
+    };
+    userProfiles.add(caller, profileToSave);
+    syncRoleToAccessControl(caller, existingRole);
+  };
+
+  public shared ({ caller }) func setUserRole(role : Role) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can set user roles");
+    };
+    let profile = switch (userProfiles.get(caller)) {
+      case (null) { Runtime.trap("Profile not found") };
+      case (?p) { p };
+    };
+    userProfiles.add(caller, { name = profile.name; role });
+    syncRoleToAccessControl(caller, role);
+  };
+
+  public query ({ caller }) func getCallerRole() : async ?Role {
+    switch (userProfiles.get(caller)) {
+      case (?profile) { ?profile.role };
+      case (null) { null };
+    };
+  };
+
+  func syncRoleToAccessControl(_user : Principal, _role : Role) {};
+
+  func checkIsAdmin(caller : Principal) {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
   };
 
   // Tournament CRUD
   public shared ({ caller }) func createTournament(name : Text) : async Nat {
     checkIsAdmin(caller);
     let id = getNextTournamentId();
-    let tournament : Tournament = {
-      id;
-      name;
-      createdAt = Time.now();
-      status = #active;
-    };
-    tournaments.add(id, tournament);
+    tournaments.add(id, { id; name; createdAt = Time.now(); status = #active });
     id;
   };
 
@@ -214,61 +278,68 @@ actor {
 
   public shared ({ caller }) func updateTournamentName(id : Nat, name : Text) : async () {
     checkIsAdmin(caller);
-    let tournament = switch (tournaments.get(id)) {
+    let t = switch (tournaments.get(id)) {
       case (null) { Runtime.trap("Tournament not found") };
       case (?t) { t };
     };
-    let updatedTournament : Tournament = {
-      id = tournament.id;
-      name;
-      createdAt = tournament.createdAt;
-      status = tournament.status;
-    };
-    tournaments.add(id, updatedTournament);
+    tournaments.add(id, { t with name });
   };
 
   public shared ({ caller }) func updateTournamentStatus(id : Nat, status : TournamentStatus) : async () {
     checkIsAdmin(caller);
-    let tournament = switch (tournaments.get(id)) {
+    let t = switch (tournaments.get(id)) {
       case (null) { Runtime.trap("Tournament not found") };
       case (?t) { t };
     };
-    let updatedTournament : Tournament = {
-      id = tournament.id;
-      name = tournament.name;
-      createdAt = tournament.createdAt;
-      status;
-    };
-    tournaments.add(id, updatedTournament);
+    tournaments.add(id, { t with status });
   };
 
   // Team CRUD
   public shared ({ caller }) func createTeam(tournamentId : Nat, name : Text, logoUrl : Text) : async Nat {
     checkIsAdmin(caller);
     let id = getNextTeamId();
-    let team : Team = {
-      id;
-      tournamentId;
-      name;
-      logoUrl;
-    };
-    teams.add(id, team);
+    teams.add(id, { id; tournamentId; name; logoUrl });
     id;
   };
 
   // Player CRUD
-  public shared ({ caller }) func createPlayer(teamId : Nat, name : Text, role : PlayerRole, jerseyNumber : Nat) : async Nat {
+  public shared ({ caller }) func createPlayer(
+    teamId : Nat,
+    name : Text,
+    role : PlayerRole,
+    jerseyNumber : Nat,
+  ) : async Nat {
     checkIsAdmin(caller);
     let id = getNextPlayerId();
-    let player : Player = {
-      id;
-      teamId;
-      name;
-      role;
-      jerseyNumber;
-    };
-    players.add(id, player);
+    players.add(id, { id; teamId; name; role; jerseyNumber });
     id;
+  };
+
+  public shared ({ caller }) func updatePlayerStats(
+    playerId : Nat,
+    cricHeroesUrl : Text,
+    totalRuns : Nat,
+    totalWickets : Nat,
+    battingAverage : Float,
+    strikeRate : Float,
+  ) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (players.get(playerId)) {
+      case (null) { Runtime.trap("Player not found") };
+      case (?_) {};
+    };
+    let stats : PlayerStats = {
+      playerId;
+      cricHeroesUrl;
+      totalRuns;
+      totalWickets;
+      battingAverage;
+      strikeRate;
+      cricHeroesVerified = cricHeroesUrl != "";
+    };
+    playerStats.add(playerId, stats);
   };
 
   // Match CRUD
@@ -281,17 +352,7 @@ actor {
   ) : async Nat {
     checkIsAdmin(caller);
     let id = getNextMatchId();
-    let match : Match = {
-      id;
-      tournamentId;
-      team1Id;
-      team2Id;
-      scheduledAt;
-      venue;
-      status = #scheduled;
-      winnerId = null;
-    };
-    matches.add(id, match);
+    matches.add(id, { id; tournamentId; team1Id; team2Id; scheduledAt; venue; status = #scheduled; winnerId = null });
     id;
   };
 
@@ -305,15 +366,7 @@ actor {
   ) : async Nat {
     checkIsAdmin(caller);
     let id = getNextInningsId();
-    let entry : Innings = {
-      id;
-      matchId;
-      battingTeamId;
-      totalRuns;
-      totalWickets;
-      totalOvers;
-    };
-    innings.add(id, entry);
+    innings.add(id, { id; matchId; battingTeamId; totalRuns; totalWickets; totalOvers });
     id;
   };
 
@@ -330,18 +383,7 @@ actor {
   ) : async Nat {
     checkIsAdmin(caller);
     let id = getNextBattingEntryId();
-    let entry : BattingEntry = {
-      id;
-      inningsId;
-      playerId;
-      runs;
-      balls;
-      fours;
-      sixes;
-      isOut;
-      dismissalType;
-    };
-    battingEntries.add(id, entry);
+    battingEntries.add(id, { id; inningsId; playerId; runs; balls; fours; sixes; isOut; dismissalType });
     id;
   };
 
@@ -356,17 +398,33 @@ actor {
   ) : async Nat {
     checkIsAdmin(caller);
     let id = getNextBowlingEntryId();
-    let entry : BowlingEntry = {
-      id;
-      inningsId;
-      playerId;
-      overs;
-      maidens;
-      runs;
-      wickets;
-    };
-    bowlingEntries.add(id, entry);
+    bowlingEntries.add(id, { id; inningsId; playerId; overs; maidens; runs; wickets });
     id;
+  };
+
+  // Feedback
+  public shared ({ caller }) func submitFeedback(category : Text, message : Text) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Must be logged in to submit feedback");
+    };
+    let roleText = switch (userProfiles.get(caller)) {
+      case (?p) {
+        switch (p.role) {
+          case (#organiser) { "Organiser" };
+          case (#franchisee) { "Franchisee" };
+          case (#viewer) { "Viewer" };
+        };
+      };
+      case (null) { "Unknown" };
+    };
+    let id = getNextFeedbackId();
+    feedbackMessages.add(id, { id; authorPrincipal = caller; authorRole = roleText; category; message; timestamp = Time.now() });
+    id;
+  };
+
+  public query ({ caller }) func getFeedback() : async [FeedbackMessage] {
+    checkIsAdmin(caller);
+    getAllFromMap(feedbackMessages);
   };
 
   // Public Getters
@@ -378,15 +436,16 @@ actor {
     getAllFromMap(teams).filter(func(t) { t.tournamentId == tournamentId });
   };
 
-  public query ({ caller }) func getPlayersForTeam(teamId : Nat) : async [Player] {
-    getAllFromMap(players).filter(func(p) { p.teamId == teamId });
+  public query ({ caller }) func getPlayersForTeam(teamId : Nat) : async [PlayerWithStats] {
+    getAllFromMap(players)
+      .filter(func(p) { p.teamId == teamId })
+      .map(func(p : Player) : PlayerWithStats { mergePlayerStats(p) });
   };
 
   public query ({ caller }) func getMatchesForTournament(tournamentId : Nat) : async [Match] {
     getAllFromMap(matches).filter(func(m) { m.tournamentId == tournamentId });
   };
 
-  // Added static trending players "widget" as a pure backend demo
   public query ({ caller }) func getTrendingPlayers() : async [TrendingPlayer] {
     trendingPlayers;
   };
@@ -396,165 +455,101 @@ actor {
       case (null) { Runtime.trap("Match not found") };
       case (?m) { m };
     };
-
     let matchInnings = getAllFromMap(innings).filter(func(i) { i.matchId == matchId });
     var team1Score = 0;
     var team2Score = 0;
-
     for (inn in matchInnings.values()) {
       if (inn.battingTeamId == match.team1Id) { team1Score := inn.totalRuns };
       if (inn.battingTeamId == match.team2Id) { team2Score := inn.totalRuns };
     };
-
     {
       match;
-      scorecard = {
-        team1Id = match.team1Id;
-        team2Id = match.team2Id;
-        team1Score;
-        team2Score;
-      };
+      scorecard = { team1Id = match.team1Id; team2Id = match.team2Id; team1Score; team2Score };
     };
   };
-
-  // Calculations
 
   public query ({ caller }) func getPointsTable(tournamentId : Nat) : async [PointsTableEntry] {
     let teamsForTournament = getAllFromMap(teams).filter(func(t) { t.tournamentId == tournamentId });
     let teamsMap = Map.empty<Nat, PointsTableEntry>();
-
     for (team in teamsForTournament.values()) {
-      let initialStats : PointsTableEntry = {
-        teamId = team.id;
-        matchesPlayed = 0;
-        wins = 0;
-        losses = 0;
-        ties = 0;
-        points = 0;
-        netRunRate = 0.0;
-      };
-      teamsMap.add(team.id, initialStats);
+      teamsMap.add(team.id, { teamId = team.id; matchesPlayed = 0; wins = 0; losses = 0; ties = 0; points = 0; netRunRate = 0.0 });
     };
-
     let matchesForTournament = getAllFromMap(matches).filter(func(m) { m.tournamentId == tournamentId });
-
     for (m in matchesForTournament.values()) {
-      let team1 = teamsMap.get(m.team1Id);
-      let team2 = teamsMap.get(m.team2Id);
-
-      switch (team1) {
-        case (?t1) {
-          let updatedTeam1 = {
-            t1 with
-            matchesPlayed = t1.matchesPlayed + 1;
-          };
-          teamsMap.add(m.team1Id, updatedTeam1);
-        };
+      switch (teamsMap.get(m.team1Id)) {
+        case (?t1) { teamsMap.add(m.team1Id, { t1 with matchesPlayed = t1.matchesPlayed + 1 }) };
         case (null) {};
       };
-
-      switch (team2) {
-        case (?t2) {
-          let updatedTeam2 = {
-            t2 with
-            matchesPlayed = t2.matchesPlayed + 1;
-          };
-          teamsMap.add(m.team2Id, updatedTeam2);
-        };
+      switch (teamsMap.get(m.team2Id)) {
+        case (?t2) { teamsMap.add(m.team2Id, { t2 with matchesPlayed = t2.matchesPlayed + 1 }) };
         case (null) {};
       };
-
       switch (m.winnerId) {
         case (?winner) {
-          let winnerStats = teamsMap.get(winner);
-          let loser = if (winner == m.team1Id) { m.team2Id } else {
-            m.team1Id;
-          };
-          let loserStats = teamsMap.get(loser);
-
-          switch (winnerStats) {
-            case (?w) {
-              let updatedWinner = {
-                w with
-                wins = w.wins + 1;
-                points = w.points + 2;
-              };
-              teamsMap.add(winner, updatedWinner);
-            };
+          let loser = if (winner == m.team1Id) { m.team2Id } else { m.team1Id };
+          switch (teamsMap.get(winner)) {
+            case (?w) { teamsMap.add(winner, { w with wins = w.wins + 1; points = w.points + 2 }) };
             case (null) {};
           };
-
-          switch (loserStats) {
-            case (?l) {
-              let updatedLoser = {
-                l with
-                losses = l.losses + 1;
-              };
-              teamsMap.add(loser, updatedLoser);
-            };
+          switch (teamsMap.get(loser)) {
+            case (?l) { teamsMap.add(loser, { l with losses = l.losses + 1 }) };
             case (null) {};
           };
         };
         case (null) {};
       };
     };
-
     teamsMap.values().toArray().sort();
   };
 
+  // Helper: merge Player with its optional PlayerStats
+  func mergePlayerStats(p : Player) : PlayerWithStats {
+    switch (playerStats.get(p.id)) {
+      case (?s) {
+        {
+          id = p.id;
+          teamId = p.teamId;
+          name = p.name;
+          role = p.role;
+          jerseyNumber = p.jerseyNumber;
+          cricHeroesUrl = s.cricHeroesUrl;
+          totalRuns = s.totalRuns;
+          totalWickets = s.totalWickets;
+          battingAverage = s.battingAverage;
+          strikeRate = s.strikeRate;
+          cricHeroesVerified = s.cricHeroesVerified;
+        };
+      };
+      case (null) {
+        {
+          id = p.id;
+          teamId = p.teamId;
+          name = p.name;
+          role = p.role;
+          jerseyNumber = p.jerseyNumber;
+          cricHeroesUrl = "";
+          totalRuns = 0;
+          totalWickets = 0;
+          battingAverage = 0.0;
+          strikeRate = 0.0;
+          cricHeroesVerified = false;
+        };
+      };
+    };
+  };
+
   // Helper Functions
+  func getNextTournamentId() : Nat { let id = nextTournamentId; nextTournamentId += 1; id };
+  func getNextTeamId() : Nat { let id = nextTeamId; nextTeamId += 1; id };
+  func getNextPlayerId() : Nat { let id = nextPlayerId; nextPlayerId += 1; id };
+  func getNextMatchId() : Nat { let id = nextMatchId; nextMatchId += 1; id };
+  func getNextInningsId() : Nat { let id = nextInningsId; nextInningsId += 1; id };
+  func getNextBattingEntryId() : Nat { let id = nextBattingEntryId; nextBattingEntryId += 1; id };
+  func getNextBowlingEntryId() : Nat { let id = nextBowlingEntryId; nextBowlingEntryId += 1; id };
+  func getNextFeedbackId() : Nat { let id = nextFeedbackId; nextFeedbackId += 1; id };
 
-  func getNextTournamentId() : Nat {
-    let id = nextTournamentId;
-    nextTournamentId += 1;
-    id;
-  };
-
-  func getNextTeamId() : Nat {
-    let id = nextTeamId;
-    nextTeamId += 1;
-    id;
-  };
-
-  func getNextPlayerId() : Nat {
-    let id = nextPlayerId;
-    nextPlayerId += 1;
-    id;
-  };
-
-  func getNextMatchId() : Nat {
-    let id = nextMatchId;
-    nextMatchId += 1;
-    id;
-  };
-
-  func getNextInningsId() : Nat {
-    let id = nextInningsId;
-    nextInningsId += 1;
-    id;
-  };
-
-  func getNextBattingEntryId() : Nat {
-    let id = nextBattingEntryId;
-    nextBattingEntryId += 1;
-    id;
-  };
-
-  func getNextBowlingEntryId() : Nat {
-    let id = nextBowlingEntryId;
-    nextBowlingEntryId += 1;
-    id;
-  };
-
-  // Helper function for persistent Map data
   func getAllFromMap<V>(map : Map.Map<Nat, V>) : [V] {
     map.values().toArray();
-  };
-
-  func checkIsAdmin(caller : Principal) {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can perform this action");
-    };
   };
 
   public type MatchScorecard = {

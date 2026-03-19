@@ -63,7 +63,14 @@ function TeamCard({
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
           style={{
-            background: `linear-gradient(135deg, ${color}, ${color.replace("0.55", "0.45").replace("0.60", "0.50").replace("0.65", "0.55").replace("0.70", "0.60")})`,
+            background: (() => {
+              const darkerColor = color.replace(
+                /^(oklch\()(\d+\.\d+)/,
+                (_: string, prefix: string, l: string) =>
+                  `${prefix}${Math.max(0, Number.parseFloat(l) - 0.1).toFixed(2)}`,
+              );
+              return `linear-gradient(135deg, ${color}, ${darkerColor})`;
+            })(),
           }}
         >
           {abbr}

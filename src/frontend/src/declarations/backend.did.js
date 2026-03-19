@@ -29,7 +29,12 @@ export const PlayerRole = IDL.Variant({
   'wicketkeeper' : IDL.Null,
   'batsman' : IDL.Null,
 });
-export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const Role = IDL.Variant({
+  'organiser' : IDL.Null,
+  'franchisee' : IDL.Null,
+  'viewer' : IDL.Null,
+});
+export const UserProfile = IDL.Record({ 'name' : IDL.Text, 'role' : Role });
 export const MatchStatus = IDL.Variant({
   'scheduled' : IDL.Null,
   'live' : IDL.Null,
@@ -133,6 +138,7 @@ export const idlService = IDL.Service({
     ),
   'createTeam' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text], [IDL.Nat], []),
   'createTournament' : IDL.Func([IDL.Text], [IDL.Nat], []),
+  'getCallerRole' : IDL.Func([], [IDL.Opt(Role)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getMatchDetails' : IDL.Func([IDL.Nat], [MatchDetails], ['query']),
@@ -154,6 +160,7 @@ export const idlService = IDL.Service({
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setUserRole' : IDL.Func([Role], [], []),
   'updateTournamentName' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'updateTournamentStatus' : IDL.Func([IDL.Nat, TournamentStatus], [], []),
 });
@@ -182,7 +189,12 @@ export const idlFactory = ({ IDL }) => {
     'wicketkeeper' : IDL.Null,
     'batsman' : IDL.Null,
   });
-  const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const Role = IDL.Variant({
+    'organiser' : IDL.Null,
+    'franchisee' : IDL.Null,
+    'viewer' : IDL.Null,
+  });
+  const UserProfile = IDL.Record({ 'name' : IDL.Text, 'role' : Role });
   const MatchStatus = IDL.Variant({
     'scheduled' : IDL.Null,
     'live' : IDL.Null,
@@ -286,6 +298,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'createTeam' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text], [IDL.Nat], []),
     'createTournament' : IDL.Func([IDL.Text], [IDL.Nat], []),
+    'getCallerRole' : IDL.Func([], [IDL.Opt(Role)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getMatchDetails' : IDL.Func([IDL.Nat], [MatchDetails], ['query']),
@@ -311,6 +324,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setUserRole' : IDL.Func([Role], [], []),
     'updateTournamentName' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'updateTournamentStatus' : IDL.Func([IDL.Nat, TournamentStatus], [], []),
   });

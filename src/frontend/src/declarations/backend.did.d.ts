@@ -57,6 +57,9 @@ export interface PointsTableEntry {
   'teamId' : bigint,
   'points' : bigint,
 }
+export type Role = { 'organiser' : null } |
+  { 'franchisee' : null } |
+  { 'viewer' : null };
 export interface Team {
   'id' : bigint,
   'name' : string,
@@ -78,7 +81,7 @@ export interface TrendingPlayer {
   'wickets' : bigint,
   'tournamentId' : bigint,
 }
-export interface UserProfile { 'name' : string }
+export interface UserProfile { 'name' : string, 'role' : Role }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -104,6 +107,7 @@ export interface _SERVICE {
   'createPlayer' : ActorMethod<[bigint, string, PlayerRole, bigint], bigint>,
   'createTeam' : ActorMethod<[bigint, string, string], bigint>,
   'createTournament' : ActorMethod<[string], bigint>,
+  'getCallerRole' : ActorMethod<[], [] | [Role]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getMatchDetails' : ActorMethod<[bigint], MatchDetails>,
@@ -117,6 +121,7 @@ export interface _SERVICE {
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setUserRole' : ActorMethod<[Role], undefined>,
   'updateTournamentName' : ActorMethod<[bigint, string], undefined>,
   'updateTournamentStatus' : ActorMethod<[bigint, TournamentStatus], undefined>,
 }

@@ -7,9 +7,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ChevronDown,
+  Compass,
   LayoutDashboard,
   LogIn,
   LogOut,
+  MessageCircle,
   Settings,
   Swords,
   Trophy,
@@ -18,24 +20,101 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import type { Tournament } from "../../backend";
+import type { UserRole } from "../../context/AppContext";
 import { useAppContext } from "../../context/AppContext";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import { useTournaments } from "../../hooks/useQueries";
 
-const NAV_ITEMS = [
-  { id: "dashboard" as const, label: "My Dashboard", icon: LayoutDashboard },
-  { id: "tournaments" as const, label: "Tournaments", icon: Trophy },
-  { id: "teams" as const, label: "Teams", icon: Users },
-  { id: "players" as const, label: "Players", icon: User },
-  { id: "matches" as const, label: "Matches", icon: Swords },
+type NavItemId =
+  | "dashboard"
+  | "tournaments"
+  | "teams"
+  | "players"
+  | "matches"
+  | "looking"
+  | "suggestions";
+
+const ALL_NAV_ITEMS: {
+  id: NavItemId;
+  label: string;
+  icon: React.ElementType;
+}[] = [
+  { id: "dashboard", label: "My Dashboard", icon: LayoutDashboard },
+  { id: "tournaments", label: "Tournaments", icon: Trophy },
+  { id: "teams", label: "Teams", icon: Users },
+  { id: "players", label: "Players", icon: User },
+  { id: "matches", label: "Matches", icon: Swords },
+  { id: "looking", label: "Looking Board", icon: Compass },
+  { id: "suggestions", label: "Suggestions", icon: MessageCircle },
 ];
 
-export default function Sidebar() {
+const ROLE_NAV: Record<UserRole, NavItemId[]> = {
+  organiser: [
+    "dashboard",
+    "tournaments",
+    "teams",
+    "players",
+    "matches",
+    "looking",
+    "suggestions",
+  ],
+  franchisee: [
+    "dashboard",
+    "teams",
+    "players",
+    "matches",
+    "looking",
+    "suggestions",
+  ],
+  viewer: ["dashboard", "matches", "suggestions"],
+  player: ["dashboard", "matches", "players", "suggestions"],
+  umpire: ["dashboard", "matches", "suggestions"],
+  scorer: ["dashboard", "matches", "players", "suggestions"],
+};
+
+const ROLE_BADGE: Record<UserRole, { label: string; className: string }> = {
+  organiser: {
+    label: "Organiser",
+    className: "bg-amber-500/20 text-amber-400 border-amber-500/40",
+  },
+  franchisee: {
+    label: "Franchisee",
+    className: "bg-sky-500/20 text-sky-400 border-sky-500/40",
+  },
+  viewer: {
+    label: "Viewer",
+    className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
+  },
+  player: {
+    label: "Player",
+    className: "bg-violet-500/20 text-violet-400 border-violet-500/40",
+  },
+  umpire: {
+    label: "Umpire",
+    className: "bg-orange-500/20 text-orange-400 border-orange-500/40",
+  },
+  scorer: {
+    label: "Scorer",
+    className: "bg-rose-500/20 text-rose-400 border-rose-500/40",
+  },
+};
+
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export default function Sidebar({
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const {
     currentPage,
     setCurrentPage,
     selectedTournament,
     setSelectedTournament,
+    userRole,
+    setUserRole,
   } = useAppContext();
   const { identity, clear, loginStatus } = useInternetIdentity();
   const { data: tournaments = [] } = useTournaments();
@@ -45,13 +124,25 @@ export default function Sidebar() {
     ? `${identity.getPrincipal().toString().slice(0, 10)}...`
     : "";
 
+  const allowedIds: NavItemId[] = userRole
+    ? ROLE_NAV[userRole]
+    : ["dashboard", "matches", "looking", "suggestions"];
+  const navItems = ALL_NAV_ITEMS.filter((item) => allowedIds.includes(item.id));
+
+  function handleLogout() {
+    clear();
+    setUserRole(null);
+  }
+
   function handleSelectTournament(t: Tournament) {
     setSelectedTournament(t);
   }
 
+  const roleBadge = userRole ? ROLE_BADGE[userRole] : null;
+
   return (
     <aside
-      className="fixed left-0 top-0 h-full w-64 flex flex-col z-40"
+      className={`fixed left-0 top-0 h-full w-64 flex flex-col z-40 ${mobileOpen ? "flex" : "hidden md:flex"}`}
       style={{
         background:
           "linear-gradient(180deg, oklch(0.21 0.055 236) 0%, oklch(0.17 0.05 240) 100%)",
@@ -108,15 +199,18 @@ export default function Sidebar() {
       )}
 
       {/* Nav Items */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {NAV_ITEMS.map((item) => {
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
           const active = currentPage === item.id;
           return (
             <motion.button
               key={item.id}
               type="button"
               whileHover={{ x: 2 }}
-              onClick={() => setCurrentPage(item.id)}
+              onClick={() => {
+                setCurrentPage(item.id as Parameters<typeof setCurrentPage>[0]);
+                onMobileClose?.();
+              }}
               data-ocid={`nav.${item.id}.link`}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
@@ -135,11 +229,23 @@ export default function Sidebar() {
 
       {/* Bottom User Area */}
       <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
+        {/* Role Badge */}
+        {isLoggedIn && roleBadge && (
+          <div
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold mb-2 ${roleBadge.className}`}
+            data-ocid="sidebar.role.badge"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+            {roleBadge.label}
+          </div>
+        )}
+
         <button
           type="button"
-          onClick={() => setCurrentPage("dashboard")}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+          disabled
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground/40 cursor-not-allowed"
           data-ocid="nav.settings.link"
+          title="Settings – Coming soon"
         >
           <Settings className="w-4 h-4" />
           Settings
@@ -150,12 +256,12 @@ export default function Sidebar() {
             <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-secondary/40 border border-sidebar-border">
               <Avatar className="w-8 h-8">
                 <AvatarFallback className="bg-primary/30 text-cricket-green text-xs font-bold">
-                  A
+                  {userRole ? userRole[0].toUpperCase() : "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-foreground truncate">
-                  Admin
+                <div className="text-xs font-semibold text-foreground truncate capitalize">
+                  {userRole ?? "User"}
                 </div>
                 <div className="text-xs text-muted-foreground truncate">
                   {principalShort}
@@ -165,7 +271,7 @@ export default function Sidebar() {
             </div>
             <button
               type="button"
-              onClick={clear}
+              onClick={handleLogout}
               data-ocid="nav.logout.button"
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors mt-1"
             >
@@ -181,7 +287,7 @@ export default function Sidebar() {
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-cricket-green hover:bg-primary/10 transition-colors"
           >
             <LogIn className="w-4 h-4" />
-            Login / Admin
+            Login / Select Role
           </button>
         )}
       </div>

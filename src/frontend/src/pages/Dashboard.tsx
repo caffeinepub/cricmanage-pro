@@ -33,6 +33,33 @@ const DEMO_POINTS = [
   { rank: 4, team: "RCB", p: 10, w: 5, l: 5, nrr: "-0.15", pts: 10 },
 ];
 
+const DEMO_SCHEDULE = [
+  {
+    teams: "KKR vs RCB",
+    date: "Sat, Mar 22",
+    time: "07:30 PM",
+    venue: "Eden Gardens, Kolkata",
+  },
+  {
+    teams: "DC vs PBKS",
+    date: "Sun, Mar 23",
+    time: "03:30 PM",
+    venue: "Arun Jaitley Stadium",
+  },
+  {
+    teams: "SRH vs RR",
+    date: "Mon, Mar 24",
+    time: "07:30 PM",
+    venue: "Rajiv Gandhi Stadium",
+  },
+  {
+    teams: "GT vs LSG",
+    date: "Tue, Mar 25",
+    time: "07:30 PM",
+    venue: "Narendra Modi Stadium",
+  },
+];
+
 function StatCard({
   label,
   value,
@@ -108,12 +135,25 @@ function TeamCard({
 function LiveScorecard({ match, teams }: { match: Match; teams: Team[] }) {
   const team1 = teams.find((t) => t.id === match.team1Id);
   const team2 = teams.find((t) => t.id === match.team2Id);
+  const matchDate = new Date(Number(match.scheduledAt / BigInt(1_000_000)));
+  const dateStr = matchDate.toLocaleDateString("en", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const timeStr = matchDate.toLocaleTimeString("en", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return (
     <div>
       <div className="text-lg font-bold text-foreground mb-1">
         {team1?.name || "Team 1"} vs {team2?.name || "Team 2"}
       </div>
-      <div className="text-sm text-muted-foreground mb-2">{match.venue}</div>
+      <div className="text-sm text-muted-foreground mb-1">{match.venue}</div>
+      <div className="text-xs text-muted-foreground mb-2">
+        📅 {dateStr} | ⏰ {timeStr}
+      </div>
       <div className="text-2xl font-bold text-cricket-green mb-1">112/3</div>
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <span>Ov: 14.2</span>
@@ -180,12 +220,14 @@ export default function Dashboard() {
   const displayTeams =
     teams.length > 0
       ? teams.slice(0, 4).map((t) => ({
-          abbr: t.name
-            .split(" ")
-            .map((w) => w[0])
-            .join("")
-            .slice(0, 3)
-            .toUpperCase(),
+          abbr:
+            (t.name || "?")
+              .split(" ")
+              .filter(Boolean)
+              .map((w) => w[0])
+              .join("")
+              .slice(0, 3)
+              .toUpperCase() || "?",
           name: t.name,
           emoji: "🏏",
           w: 5,
@@ -292,8 +334,11 @@ export default function Dashboard() {
                   <div className="text-lg font-bold text-foreground mb-1">
                     MI vs CSK
                   </div>
-                  <div className="text-sm text-muted-foreground mb-2">
+                  <div className="text-sm text-muted-foreground mb-1">
                     Wankhede Stadium, Mumbai
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    📅 Sat, Mar 22 | ⏰ 07:30 PM
                   </div>
                   <div className="text-2xl font-bold text-cricket-green mb-1">
                     147/4
@@ -338,68 +383,72 @@ export default function Dashboard() {
                 <MoreHorizontal className="w-4 h-4" />
               </button>
             </div>
-            <div className="px-4 pb-4">
+            <div className="px-4 pb-2">
               {upcomingMatches.length > 0
-                ? upcomingMatches.slice(0, 4).map((m, i) => {
+                ? upcomingMatches.slice(0, 5).map((m, i) => {
                     const t1 = teams.find((t) => t.id === m.team1Id);
                     const t2 = teams.find((t) => t.id === m.team2Id);
                     const d = new Date(
                       Number(m.scheduledAt / BigInt(1_000_000)),
                     );
+                    const dateStr = d.toLocaleDateString("en", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    });
+                    const timeStr = d.toLocaleTimeString("en", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
                     return (
                       <div
                         key={m.id.toString()}
                         data-ocid={`dashboard.match.item.${i + 1}`}
                         className="flex items-center justify-between py-2.5 border-b border-cricket-border last:border-0"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground w-12">
-                            {d.toLocaleDateString("en", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                          <span className="text-sm font-medium text-foreground">
+                        <div className="flex-1 min-w-0 mr-2">
+                          <div className="text-sm font-medium text-foreground truncate">
                             {t1?.name || "TBD"} vs {t2?.name || "TBD"}
-                          </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate mt-0.5">
+                            {dateStr} | {timeStr} · {m.venue}
+                          </div>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs border-cricket-border text-muted-foreground hover:text-foreground"
-                        >
-                          Manage
-                        </Button>
+                        <Badge className="flex-shrink-0 bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                          Upcoming
+                        </Badge>
                       </div>
                     );
                   })
-                : [
-                    { teams: "KKR vs RCB", date: "Mar 22" },
-                    { teams: "DC vs PBKS", date: "Mar 23" },
-                    { teams: "SRH vs RR", date: "Mar 24" },
-                    { teams: "GT vs LSG", date: "Mar 25" },
-                  ].map((m) => (
+                : DEMO_SCHEDULE.map((m, i) => (
                     <div
                       key={m.teams}
+                      data-ocid={`dashboard.match.item.${i + 1}`}
                       className="flex items-center justify-between py-2.5 border-b border-cricket-border last:border-0"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground w-12">
-                          {m.date}
-                        </span>
-                        <span className="text-sm font-medium text-foreground">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <div className="text-sm font-medium text-foreground">
                           {m.teams}
-                        </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {m.date} | {m.time} · {m.venue}
+                        </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs border-cricket-border text-muted-foreground hover:text-foreground"
-                      >
-                        Manage
-                      </Button>
+                      <Badge className="flex-shrink-0 bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                        Upcoming
+                      </Badge>
                     </div>
                   ))}
+            </div>
+            <div className="px-4 pb-3">
+              <button
+                type="button"
+                onClick={() => setCurrentPage("matches")}
+                data-ocid="dashboard.matches.link"
+                className="w-full text-xs text-cricket-green hover:text-cricket-green/80 font-medium py-1.5 border border-cricket-border/50 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                View All Matches →
+              </button>
             </div>
           </div>
         </div>

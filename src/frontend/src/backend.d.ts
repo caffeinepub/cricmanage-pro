@@ -58,6 +58,7 @@ export interface MatchScorecard {
 }
 export interface UserProfile {
     name: string;
+    role: Role;
 }
 export interface Team {
     id: bigint;
@@ -85,6 +86,11 @@ export enum PlayerRole {
     wicketkeeper = "wicketkeeper",
     batsman = "batsman"
 }
+export enum Role {
+    organiser = "organiser",
+    franchisee = "franchisee",
+    viewer = "viewer"
+}
 export enum TournamentStatus {
     active = "active",
     completed = "completed"
@@ -103,6 +109,7 @@ export interface backendInterface {
     createPlayer(teamId: bigint, name: string, role: PlayerRole, jerseyNumber: bigint): Promise<bigint>;
     createTeam(tournamentId: bigint, name: string, logoUrl: string): Promise<bigint>;
     createTournament(name: string): Promise<bigint>;
+    getCallerRole(): Promise<Role | null>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getMatchDetails(matchId: bigint): Promise<MatchDetails>;
@@ -116,6 +123,7 @@ export interface backendInterface {
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setUserRole(role: Role): Promise<void>;
     updateTournamentName(id: bigint, name: string): Promise<void>;
     updateTournamentStatus(id: bigint, status: TournamentStatus): Promise<void>;
 }
