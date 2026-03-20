@@ -35,6 +35,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart2,
   Calendar,
+  CheckCircle2,
+  Edit3,
+  Eye,
   Loader2,
   MapPin,
   Plus,
@@ -49,7 +52,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { Match } from "../backend";
 import { MatchStatus } from "../backend";
+import { CommsTab } from "../components/match/CommsTab";
+import { ScorecardTab } from "../components/match/ScorecardTab";
 import { useAppContext } from "../context/AppContext";
+import type { UserRole } from "../context/AppContext";
 import {
   useCreateMatch,
   useIsAdmin,
@@ -80,6 +86,13 @@ const ROUND_LABELS = [
   "League",
   "Super Over",
 ];
+
+const ROLE_LABELS: Record<string, string> = {
+  viewer: "Viewer",
+  player: "Player",
+  umpire: "Umpire",
+  franchisee: "Franchisee",
+};
 
 // Demo data for leaderboard, heroes and points table
 const DEMO_LEADERBOARD = [
@@ -251,22 +264,60 @@ const MATCH_DETAIL_DEMO = {
   },
 };
 
+interface ScoreState {
+  runs: string;
+  wickets: string;
+  overs: string;
+}
+
 function MatchDetailSheet({
   match,
   teams,
   open,
   onClose,
   roundLabel,
+  userRole,
 }: {
   match: Match | null;
   teams: { id: bigint; name: string }[];
   open: boolean;
   onClose: () => void;
   roundLabel: string;
+  userRole: UserRole | null;
 }) {
   const team1 = teams.find((t) => t.id === match?.team1Id);
   const team2 = teams.find((t) => t.id === match?.team2Id);
   const isLive = match?.status === MatchStatus.live;
+  const isScheduled = match?.status === MatchStatus.scheduled;
+
+  const canScore = userRole === "scorer" || userRole === "organiser";
+  const isReadOnly = !canScore;
+  const roleLabel = userRole ? (ROLE_LABELS[userRole] ?? userRole) : "Guest";
+
+  const [team1Score, setTeam1Score] = useState<ScoreState>({
+    runs: "182",
+    wickets: "4",
+    overs: "20.0",
+  });
+  const [team2Score, setTeam2Score] = useState<ScoreState>({
+    runs: "181",
+    wickets: "7",
+    overs: "20.0",
+  });
+
+  // Draft inputs
+  const [draftT1, setDraftT1] = useState<ScoreState>({ ...team1Score });
+  const [draftT2, setDraftT2] = useState<ScoreState>({ ...team2Score });
+
+  function handleUpdateScore() {
+    setTeam1Score({ ...draftT1 });
+    setTeam2Score({ ...draftT2 });
+    toast.success("Score updated!");
+  }
+
+  function handleMarkComplete() {
+    toast.success("Match marked as complete");
+  }
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -333,6 +384,29 @@ function MatchDetailSheet({
           </TabsList>
 
           <TabsContent value="live" className="space-y-4">
+            {/* Read-only banner for non-scorers */}
+            {isReadOnly && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-cricket-border"
+                style={{ background: "oklch(0.20 0.04 240 / 0.6)" }}
+                data-ocid="matches.detail.readonly.panel"
+              >
+                <Eye className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs text-muted-foreground">
+                  Viewing as{" "}
+                  <span
+                    className="font-semibold"
+                    style={{ color: "oklch(0.75 0.12 240)" }}
+                  >
+                    {roleLabel}
+                  </span>{" "}
+                  · Read only
+                </span>
+              </motion.div>
+            )}
+
             {/* Insight banner */}
             <div
               className="rounded-lg p-3 border border-cricket-green/30"
@@ -357,10 +431,10 @@ function MatchDetailSheet({
                   {team1?.name || MATCH_DETAIL_DEMO.team1.name}
                 </span>
                 <span className="text-lg font-bold text-foreground">
-                  {MATCH_DETAIL_DEMO.team1.score}
+                  {team1Score.runs}/{team1Score.wickets}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  ({MATCH_DETAIL_DEMO.team1.overs})
+                  ({team1Score.overs} Ov)
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -368,10 +442,10 @@ function MatchDetailSheet({
                   {team2?.name || MATCH_DETAIL_DEMO.team2.name}
                 </span>
                 <span className="text-lg font-bold text-foreground">
-                  {MATCH_DETAIL_DEMO.team2.score}
+                  {team2Score.runs}/{team2Score.wickets}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  ({MATCH_DETAIL_DEMO.team2.overs})
+                  ({team2Score.overs} Ov)
                 </span>
               </div>
               <div className="pt-2 border-t border-cricket-border">
@@ -380,6 +454,180 @@ function MatchDetailSheet({
                 </span>
               </div>
             </div>
+
+            {/* Live Score Entry — scorer/organiser only */}
+            {canScore && (isLive || isScheduled) && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-cricket-green/30 p-4 space-y-4"
+                style={{ background: "oklch(0.22 0.06 230)" }}
+                data-ocid="matches.detail.score_entry.panel"
+              >
+                <div className="flex items-center gap-2 pb-1 border-b border-cricket-border">
+                  <Edit3 className="w-3.5 h-3.5 text-cricket-green" />
+                  <span className="text-xs font-bold text-cricket-green uppercase tracking-widest">
+                    Live Score Entry
+                  </span>
+                  {isLive && (
+                    <Badge className="ml-auto text-[9px] bg-cricket-green/20 text-cricket-green border-cricket-green/30 animate-pulse">
+                      ● LIVE
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Team 1 score row */}
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-muted-foreground truncate">
+                    {team1?.name || MATCH_DETAIL_DEMO.team1.name}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">
+                        Runs
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={draftT1.runs}
+                        onChange={(e) =>
+                          setDraftT1((prev) => ({
+                            ...prev,
+                            runs: e.target.value,
+                          }))
+                        }
+                        className="h-8 text-sm bg-secondary border-cricket-border text-foreground"
+                        data-ocid="matches.detail.team1_runs.input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">
+                        Wkts
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={draftT1.wickets}
+                        onChange={(e) =>
+                          setDraftT1((prev) => ({
+                            ...prev,
+                            wickets: e.target.value,
+                          }))
+                        }
+                        className="h-8 text-sm bg-secondary border-cricket-border text-foreground"
+                        data-ocid="matches.detail.team1_wickets.input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">
+                        Overs
+                      </Label>
+                      <Input
+                        type="text"
+                        placeholder="18.3"
+                        value={draftT1.overs}
+                        onChange={(e) =>
+                          setDraftT1((prev) => ({
+                            ...prev,
+                            overs: e.target.value,
+                          }))
+                        }
+                        className="h-8 text-sm bg-secondary border-cricket-border text-foreground"
+                        data-ocid="matches.detail.team1_overs.input"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Team 2 score row */}
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-muted-foreground truncate">
+                    {team2?.name || MATCH_DETAIL_DEMO.team2.name}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">
+                        Runs
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={draftT2.runs}
+                        onChange={(e) =>
+                          setDraftT2((prev) => ({
+                            ...prev,
+                            runs: e.target.value,
+                          }))
+                        }
+                        className="h-8 text-sm bg-secondary border-cricket-border text-foreground"
+                        data-ocid="matches.detail.team2_runs.input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">
+                        Wkts
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={draftT2.wickets}
+                        onChange={(e) =>
+                          setDraftT2((prev) => ({
+                            ...prev,
+                            wickets: e.target.value,
+                          }))
+                        }
+                        className="h-8 text-sm bg-secondary border-cricket-border text-foreground"
+                        data-ocid="matches.detail.team2_wickets.input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground mb-1 block">
+                        Overs
+                      </Label>
+                      <Input
+                        type="text"
+                        placeholder="18.3"
+                        value={draftT2.overs}
+                        onChange={(e) =>
+                          setDraftT2((prev) => ({
+                            ...prev,
+                            overs: e.target.value,
+                          }))
+                        }
+                        className="h-8 text-sm bg-secondary border-cricket-border text-foreground"
+                        data-ocid="matches.detail.team2_overs.input"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    onClick={handleUpdateScore}
+                    size="sm"
+                    className="flex-1 bg-cricket-green hover:bg-cricket-green/90 text-white text-xs"
+                    data-ocid="matches.detail.update_score.button"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 mr-1.5" />
+                    Update Score
+                  </Button>
+                  <Button
+                    onClick={handleMarkComplete}
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 border-cricket-border text-muted-foreground hover:text-foreground hover:bg-secondary/60 text-xs"
+                    data-ocid="matches.detail.mark_complete.button"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                    Mark Complete
+                  </Button>
+                </div>
+              </motion.div>
+            )}
 
             {/* Shortcuts */}
             <div className="flex gap-3">
@@ -486,16 +734,31 @@ function MatchDetailSheet({
             </div>
           </TabsContent>
 
-          {["scorecard", "comms", "squads"].map((tab) => (
-            <TabsContent key={tab} value={tab}>
-              <div
-                className="rounded-xl border border-cricket-border p-12 text-center"
-                style={{ background: "oklch(0.22 0.06 230)" }}
-              >
-                <p className="text-muted-foreground text-sm">Coming soon</p>
-              </div>
-            </TabsContent>
-          ))}
+          <TabsContent value="scorecard">
+            <ScorecardTab
+              matchId={match?.id.toString() ?? "match-1"}
+              team1Name={team1?.name ?? "Team 1"}
+              team2Name={team2?.name ?? "Team 2"}
+            />
+          </TabsContent>
+
+          <TabsContent value="comms">
+            <CommsTab
+              matchId={match?.id.toString() ?? "match-1"}
+              userRole={userRole}
+            />
+          </TabsContent>
+
+          <TabsContent value="squads">
+            <div
+              className="rounded-xl border border-cricket-border p-12 text-center"
+              style={{ background: "oklch(0.22 0.06 230)" }}
+            >
+              <p className="text-muted-foreground text-sm">
+                Squads coming soon
+              </p>
+            </div>
+          </TabsContent>
         </Tabs>
       </SheetContent>
     </Sheet>
@@ -645,7 +908,7 @@ export default function Matches() {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const { selectedTournament } = useAppContext();
+  const { selectedTournament, userRole } = useAppContext();
   const { data: tournaments = [] } = useTournaments();
   const activeTournament = selectedTournament || tournaments[0] || null;
   const { data: teams = [] } = useTeams(activeTournament?.id ?? null);
@@ -1193,6 +1456,7 @@ export default function Matches() {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         roundLabel={selectedRound}
+        userRole={userRole}
       />
     </div>
   );

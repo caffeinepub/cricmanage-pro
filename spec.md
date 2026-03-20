@@ -1,36 +1,33 @@
 # CricManage Pro
 
 ## Current State
-- Full cricket tournament management app with 6 roles: Organiser, Franchisee, Viewer, Player, Umpire, Scorer
-- Backend: tournaments, teams, players, matches, innings, batting/bowling entries
-- Player model has: id, teamId, name, role, jerseyNumber — no CricHeroes or historical stats fields
-- No feedback/suggestion system exists
-- Frontend has role-based dashboards, match schedule, scorecard widgets, points table
+Version 6 is live with:
+- Six roles with RBAC, dark analytics dashboard
+- Match detail tabs: Info, Live, Scorecard, Comms, Squads
+- Live scoring: Scorers/Organisers can enter scores; others see read-only banner
+- Scorecard and Comms tabs exist but are not wired for data entry
+- CricHeroes importer, Suggestions system, Points Table all functional
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Player historical stats fields:** cricHeroesUrl, totalRuns, totalWickets, battingAverage, strikeRate, cricHeroesVerified (Bool)
-- **createPlayerWithStats** backend function: accepts above fields along with base player fields
-- **updatePlayerStats** backend function: Organiser can update a player's historical stats
-- **Feedback system:** FeedbackMessage type with id, authorPrincipal, authorRole, category, message, timestamp
-- **submitFeedback** function: any logged-in user can submit feedback
-- **getFeedback** function: Organiser-only, returns all feedback messages
+- Ball-by-ball commentary entry form in Comms tab (Scorer/Organiser only)
+- Commentary log display in Comms tab (all roles can read)
+- Scorecard tab: detailed batting and bowling scorecard per innings
+- Scorer/Organiser can log each delivery: bowler, batsman, runs, wicket type, extras
+- Auto-update scorecard totals from ball-by-ball entries
+- Read-only banner for non-scoring roles in Comms entry area
 
 ### Modify
-- **createPlayer** or add overload to accept optional cricHeroesUrl and stats for self-registration
-- **Player type** extended with cricHeroesUrl, totalRuns, totalWickets, battingAverage, strikeRate, cricHeroesVerified
+- Comms tab: replace placeholder with live commentary feed + entry form
+- Scorecard tab: replace placeholder with structured innings scorecard table
 
 ### Remove
-- Nothing removed
+- Placeholder/empty state content in Comms and Scorecard tabs
 
 ## Implementation Plan
-1. Extend Player type with historicalStats fields (cricHeroesUrl, totalRuns, totalWickets, battingAverage, strikeRate, cricHeroesVerified)
-2. Update createPlayer to accept the extended fields
-3. Add updatePlayerStats function (Organiser only)
-4. Add FeedbackMessage type and persistent store
-5. Add submitFeedback (any user) and getFeedback (Organiser only) functions
-6. Frontend: Add CricHeroes URL + stats form fields during player registration
-7. Frontend: Show "Verified by CricHeroes" badge on player profile/auction card when cricHeroesVerified = true
-8. Frontend: Add "Suggestions" page/section in sidebar for all roles to submit feedback
-9. Frontend: Add "Feedback Inbox" page for Organiser role to view all submissions
+1. Extend AppContext with commentary entries and scorecard data structures per match
+2. Build BallEntry form component (bowler, batsman, runs, extras, wicket)
+3. Build CommsTab component with feed and entry form (role-gated)
+4. Build ScorecardTab component with batting/bowling tables per innings
+5. Wire both into match detail view tabs
