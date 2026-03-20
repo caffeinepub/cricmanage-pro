@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAppContext } from "../../context/AppContext";
 import type { InningsScorecard } from "../../context/AppContext";
+import { PartnershipTracker } from "./PartnershipTracker";
 
 const FALLBACK_INNINGS: InningsScorecard = {
   battingRows: [],
@@ -289,19 +290,21 @@ export function ScorecardTab({
         </TabsList>
 
         <TabsContent value="innings1">
-          <ScrollArea className="max-h-[420px] pr-1">
+          <ScrollArea className="max-h-[520px] pr-1">
             <div className="space-y-2">
               <BattingTable innings={innings1} />
               <BowlingTable innings={innings1} />
+              <PartnershipTracker innings={innings1} />
             </div>
           </ScrollArea>
         </TabsContent>
 
         <TabsContent value="innings2">
-          <ScrollArea className="max-h-[420px] pr-1">
+          <ScrollArea className="max-h-[520px] pr-1">
             <div className="space-y-2">
               <BattingTable innings={innings2} />
               <BowlingTable innings={innings2} />
+              <PartnershipTracker innings={innings2} />
             </div>
           </ScrollArea>
         </TabsContent>

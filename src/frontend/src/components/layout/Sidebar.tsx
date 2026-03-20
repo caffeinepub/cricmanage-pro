@@ -207,6 +207,7 @@ export default function Sidebar({
               key={item.id}
               type="button"
               whileHover={{ x: 2 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
               onClick={() => {
                 setCurrentPage(item.id as Parameters<typeof setCurrentPage>[0]);
                 onMobileClose?.();
@@ -214,8 +215,8 @@ export default function Sidebar({
               data-ocid={`nav.${item.id}.link`}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
-                  ? "bg-primary/20 text-cricket-green border border-primary/30"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                  ? "text-cricket-green border border-cricket-green/25 relative overflow-hidden"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5 border border-transparent"
               }`}
             >
               <item.icon

@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import type { Match } from "../backend";
 import { MatchStatus } from "../backend";
 import { CommsTab } from "../components/match/CommsTab";
+import { LiveAnalytics } from "../components/match/LiveAnalytics";
 import { ScorecardTab } from "../components/match/ScorecardTab";
 import { useAppContext } from "../context/AppContext";
 import type { UserRole } from "../context/AppContext";
@@ -290,6 +291,7 @@ function MatchDetailSheet({
   const isLive = match?.status === MatchStatus.live;
   const isScheduled = match?.status === MatchStatus.scheduled;
 
+  const { matchCommentary } = useAppContext();
   const canScore = userRole === "scorer" || userRole === "organiser";
   const isReadOnly = !canScore;
   const roleLabel = userRole ? (ROLE_LABELS[userRole] ?? userRole) : "Guest";
@@ -628,6 +630,16 @@ function MatchDetailSheet({
                 </div>
               </motion.div>
             )}
+
+            {/* Live Analytics */}
+            <LiveAnalytics
+              matchId={match?.id.toString() ?? "match-1"}
+              entries={matchCommentary[match?.id.toString() ?? "match-1"] ?? []}
+              team1Name={team1?.name ?? "Team 1"}
+              team2Name={team2?.name ?? "Team 2"}
+              team1Score={team1Score}
+              team2Score={team2Score}
+            />
 
             {/* Shortcuts */}
             <div className="flex gap-3">

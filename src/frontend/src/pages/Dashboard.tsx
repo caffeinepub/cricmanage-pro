@@ -75,8 +75,12 @@ function StatCard({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-cricket-border p-4 shadow-card"
-      style={{ background: "oklch(0.22 0.06 230)" }}
+      className="rounded-xl p-4 shadow-card relative overflow-hidden transition-transform hover:-translate-y-0.5"
+      style={{
+        background: "oklch(0.22 0.06 230)",
+        border: "1px solid oklch(0.30 0.06 240 / 0.6)",
+        boxShadow: `0 0 0 1px ${color}22, 0 4px 16px oklch(0.10 0.05 240 / 0.4)`,
+      }}
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
